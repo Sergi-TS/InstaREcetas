@@ -20,13 +20,28 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS unsigned archive
-        run: flutter build ipa --release --no-codesign
+      - name: Force Disable Code Signing
+        run: |
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+
+      - name: Prepare Workspace
+        run: flutter build ios --release --no-codesign || true
+
+      - name: Build Unsigned App
+        run: |
+          cd ios
+          xcodebuild build -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+          cd ..
 
       - name: Package Payload
         run: |
           mkdir -p Payload
-          cp -r build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app Payload/
+          # xcodebuild outputs to ios/build/Release-iphoneos/Runner.app by default
+          cp -r ios/build/Release-iphoneos/Runner.app Payload/
           zip -r app.ipa Payload
 
       - name: Upload IPA Artifact
