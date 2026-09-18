@@ -1,0 +1,29 @@
+workflows:
+  ios-unsigned-build:
+    name: Build Unsigned iOS App
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: default
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Instalar dependencias
+        script: |
+          flutter pub get
+      - name: Build iOS unsigned app
+        script: |
+          # Evitar que Xcode intente firmar la app
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "";/g' ios/Runner.xcodeproj/project.pbxproj
+          
+          # Compilar
+          flutter build ios --release --no-codesign
+          
+          # Empaquetar el .app en un .ipa para Sideloadly
+          mkdir -p build/ios/iphoneos/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
+          cd build/ios/iphoneos
+          zip -r -q app.ipa Payload
+    artifacts:
+      - build/ios/iphoneos/app.ipa
