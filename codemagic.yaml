@@ -13,18 +13,13 @@ workflows:
           flutter pub get
       - name: Build iOS unsigned app
         script: |
-          # 1. Dejar que Flutter prepare los Pods y archivos (si da error, lo ignoramos)
-          flutter build ios --release --no-codesign || true
+          # Usar el comando oficial de Flutter para crear un archivo de Xcode (.xcarchive) sin firmar
+          flutter build ipa --release --no-codesign
           
-          # 2. Compilar manualmente con Xcode apagando cualquier firma
-          cd ios
-          xcodebuild build -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
-          cd ..
-          
-          # 3. Buscar la carpeta Runner.app generada y meterla en el zip
+          # El .xcarchive se guarda en build/ios/archive/Runner.xcarchive
+          # Dentro está la aplicación compilada (Runner.app) lista para extraer
           mkdir -p Payload
-          APP_PATH=$(find . -type d -name "Runner.app" | grep "Release-iphoneos" | head -n 1)
-          cp -r "$APP_PATH" Payload/
+          cp -r build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app Payload/
           zip -r -q app.ipa Payload
     artifacts:
       - app.ipa
