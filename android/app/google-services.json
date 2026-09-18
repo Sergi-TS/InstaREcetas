@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "471783177855",
+    "project_id": "instarecetas-8b6eb",
+    "storage_bucket": "instarecetas-8b6eb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:471783177855:android:22f4b02922c7d5c5f4094a",
+        "android_client_info": {
+          "package_name": "com.serga.recipecatcher"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAf5BK4BmCqqW-ORvoN0nmyExDtYzmHy-k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
