@@ -13,19 +13,18 @@ workflows:
           flutter pub get
       - name: Build iOS unsigned app
         script: |
-          # Forzar a Xcode a desactivar completamente las firmas de código
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
-          echo "EXPANDED_CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+          # 1. Dejar que Flutter prepare los Pods y archivos (si da error, lo ignoramos)
+          flutter build ios --release --no-codesign || true
           
-          # Compilar
-          flutter build ios --release --no-codesign
+          # 2. Compilar manualmente con Xcode apagando cualquier firma
+          cd ios
+          xcodebuild build -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          cd ..
           
-          # Empaquetar el .app en un .ipa para Sideloadly
-          mkdir -p build/ios/iphoneos/Payload
-          cp -r build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
-          cd build/ios/iphoneos
+          # 3. Buscar la carpeta Runner.app generada y meterla en el zip
+          mkdir -p Payload
+          APP_PATH=$(find . -type d -name "Runner.app" | grep "Release-iphoneos" | head -n 1)
+          cp -r "$APP_PATH" Payload/
           zip -r -q app.ipa Payload
     artifacts:
-      - build/ios/iphoneos/app.ipa
+      - app.ipa
