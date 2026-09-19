@@ -27,18 +27,9 @@ jobs:
       - name: Generate iOS Project Files
         run: flutter build ios --simulator --debug
 
-      - name: Disable Code Signing in Pods and Project
+      - name: Disable Code Signing in Project
         run: |
-          # Apagar firmas en dependencias de Firebase
-          sed -i '' '/flutter_additional_ios_build_settings(target)/a\
-              target.build_configurations.each do |config|\
-                config.build_settings["CODE_SIGNING_ALLOWED"] = "NO"\
-              end\
-          ' ios/Podfile
-          
-          cd ios && pod install && cd ..
-          
-          # Apagar firmas en el proyecto principal
+          # Apagar firmas en el proyecto principal (Flutter usa Swift Package Manager ahora, no Pods)
           sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj || true
           echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
