@@ -20,32 +20,31 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Force Disable Code Signing
+      - name: Fix Podfile Code Signing
         run: |
-          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' ios/Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' ios/Runner.xcodeproj/project.pbxproj
-          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
-          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
+          # Generar el Podfile (se crea automáticamente con este comando)
+          flutter build ios --config-only || true
+          
+          # Inyectar regla para apagar la firma en todos los Pods (Firebase, etc)
+          sed -i '' '/flutter_additional_ios_build_settings(target)/a\
+              target.build_configurations.each do |config|\
+                config.build_settings["CODE_SIGNING_ALLOWED"] = "NO"\
+              end\
+          ' ios/Podfile || true
 
-      - name: Prepare Workspace
-        run: flutter build ios --release --no-codesign || true
-
-      - name: Build Unsigned App
-        run: |
-          cd ios
-          xcodebuild build -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
-          cd ..
+      - name: Build Flutter iOS (Unsigned)
+        run: flutter build ios --release --no-codesign
 
       - name: Package Payload
         run: |
+          mkdir -p build/ios/ipa
+          cd build/ios/iphoneos
           mkdir -p Payload
-          # xcodebuild outputs to ios/build/Release-iphoneos/Runner.app by default
-          cp -r ios/build/Release-iphoneos/Runner.app Payload/
-          zip -r app.ipa Payload
+          cp -r Runner.app Payload/
+          zip -r ../ipa/InstaRecetas-Unsigned.ipa Payload/
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: InstaRecetas-iOS
-          path: app.ipa
+          path: build/ios/ipa/InstaRecetas-Unsigned.ipa
