@@ -44,7 +44,10 @@ jobs:
         run: |
           mkdir -p build/ios/ipa
           mkdir -p Payload
-          cp -r ios/build/Release-iphoneos/Runner.app Payload/
+          # Xcode suele dejar la app en DerivedData cuando se ejecuta manualmente
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData $GITHUB_WORKSPACE -type d -name "Runner.app" | grep -v "Simulator" | head -n 1)
+          echo "La aplicacion se ha encontrado en: $APP_PATH"
+          cp -r "$APP_PATH" Payload/
           zip -r build/ios/ipa/InstaRecetas-Unsigned.ipa Payload/
 
       - name: Upload IPA Artifact
