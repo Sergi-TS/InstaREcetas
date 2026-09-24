@@ -8,6 +8,8 @@ class Recipe {
   final String category;
   final String? sourceUrl;
   final String? imageUrl;
+  final String? prepTime;
+  final String? calories;
   final DateTime createdAt;
 
   Recipe({
@@ -18,6 +20,8 @@ class Recipe {
     required this.category,
     this.sourceUrl,
     this.imageUrl,
+    this.prepTime,
+    this.calories,
     required this.createdAt,
   });
 
@@ -31,6 +35,8 @@ class Recipe {
       category: data['category'] ?? 'Sin Categoría',
       sourceUrl: data['sourceUrl'],
       imageUrl: data['imageUrl'],
+      prepTime: data['prepTime'],
+      calories: data['calories'],
       createdAt: (data['createdAt'] as Timestamp).toDate(),
     );
   }
@@ -43,6 +49,8 @@ class Recipe {
       'category': category,
       'sourceUrl': sourceUrl,
       'imageUrl': imageUrl,
+      'prepTime': prepTime,
+      'calories': calories,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }

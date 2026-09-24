@@ -5,6 +5,7 @@ import 'package:recipecatcher/features/recipes/data/recipe_model.dart';
 import 'package:recipecatcher/features/recipes/presentation/pages/recipe_detail_page.dart';
 import 'package:recipecatcher/features/import_recipe/presentation/pages/import_recipe_page.dart';
 import 'package:recipecatcher/core/theme/app_theme.dart';
+import 'package:recipecatcher/features/fridge/presentation/pages/fridge_page.dart';
 
 class GalleryPage extends ConsumerWidget {
   const GalleryPage({super.key});
@@ -17,6 +18,17 @@ class GalleryPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('RecipeCatcher'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.kitchen),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FridgePage()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [

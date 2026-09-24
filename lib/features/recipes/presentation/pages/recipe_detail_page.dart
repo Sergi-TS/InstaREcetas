@@ -4,11 +4,13 @@ import 'package:recipecatcher/features/recipes/data/recipe_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:recipecatcher/core/theme/app_theme.dart';
 import 'package:recipecatcher/features/recipes/data/recipe_repository.dart';
+import 'package:recipecatcher/features/fridge/presentation/providers/fridge_provider.dart';
 
 class RecipeDetailPage extends ConsumerWidget {
   final Recipe recipe;
+  final bool isPreview;
 
-  const RecipeDetailPage({super.key, required this.recipe});
+  const RecipeDetailPage({super.key, required this.recipe, this.isPreview = false});
 
   Future<void> _launchUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
@@ -21,10 +23,18 @@ class RecipeDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detalle de Receta'),
+        title: Text(isPreview ? 'Receta Sugerida' : 'Detalle de Receta'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.redAccent),
+            IconButton(
+              icon: const Icon(Icons.restaurant_menu, color: Colors.green),
+              tooltip: '¡Cocinar esta receta!',
+              onPressed: () {
+                _showCookDialog(context, ref);
+              },
+            ),
+          if (!isPreview)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.redAccent),
             onPressed: () async {
               // Confirmar antes de borrar
               final confirm = await showDialog<bool>(
@@ -82,20 +92,55 @@ class RecipeDetailPage extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             
-            // Categoría y Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                recipe.category,
-                style: const TextStyle(
-                  color: AppTheme.primaryColor,
-                  fontWeight: FontWeight.bold,
+            // Categoría, Tiempo y Calorías
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    recipe.category,
+                    style: const TextStyle(color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
+                if (recipe.prepTime != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer, size: 16, color: Colors.orange),
+                        const SizedBox(width: 4),
+                        Text(recipe.prepTime!, style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                if (recipe.calories != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.local_fire_department, size: 16, color: Colors.red),
+                        const SizedBox(width: 4),
+                        Text(recipe.calories!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 24),
             
@@ -177,6 +222,96 @@ class RecipeDetailPage extends ConsumerWidget {
           ],
         ),
       ),
+      floatingActionButton: isPreview ? FloatingActionButton.extended(
+        onPressed: () async {
+          try {
+            final repository = ref.read(recipeRepositoryProvider);
+            await repository.saveRecipe(recipe);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('¡Receta guardada!')),
+              );
+              Navigator.pop(context); // Vuelve a la nevera
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error al guardar: $e'), backgroundColor: Colors.red),
+              );
+            }
+          }
+        },
+        icon: const Icon(Icons.save),
+        label: const Text('Guardar Receta'),
+      ) : null,
+    );
+  }
+
+  void _showCookDialog(BuildContext context, WidgetRef ref) {
+    final fridgeItems = ref.read(fridgeProvider);
+    if (fridgeItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tu nevera está vacía.')),
+      );
+      return;
+    }
+
+    final selectedIds = <String>{};
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('¿Qué ingredientes usaste?'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: fridgeItems.length,
+                  itemBuilder: (context, index) {
+                    final item = fridgeItems[index];
+                    final isSelected = selectedIds.contains(item.id);
+                    return CheckboxListTile(
+                      title: Text(item.name),
+                      subtitle: item.quantity != null ? Text(item.quantity!) : null,
+                      value: isSelected,
+                      onChanged: (bool? val) {
+                        setState(() {
+                          if (val == true) {
+                            selectedIds.add(item.id);
+                          } else {
+                            selectedIds.remove(item.id);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    for (final id in selectedIds) {
+                      ref.read(fridgeProvider.notifier).removeItem(id);
+                    }
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Se descontaron ${selectedIds.length} ingredientes de tu nevera.')),
+                    );
+                  },
+                  child: const Text('Descontar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

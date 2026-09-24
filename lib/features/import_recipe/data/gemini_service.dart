@@ -74,6 +74,8 @@ Estructura JSON requerida:
   "ingredients": ["ingrediente 1", "ingrediente 2"],
   "steps": ["paso 1", "paso 2"],
   "category": "Desayuno, Almuerzo, Cena, Postre, Snack o Bebida",
+  "prepTime": "ej. 30 minutos (opcional)",
+  "calories": "ej. 400 kcal (opcional)",
   "sourceUrl": "${sourceUrl ?? 'Si hay alguna URL en el texto original, ponla aquí, sino null'}"
 }
 
@@ -140,6 +142,243 @@ $contentToAnalyze
         category: jsonMap['category'] ?? 'Sin Categoría',
         sourceUrl: jsonMap['sourceUrl'] ?? sourceUrl,
         imageUrl: extractedImageUrl,
+        prepTime: jsonMap['prepTime'],
+        calories: jsonMap['calories'],
+        createdAt: DateTime.now(),
+      );
+    } catch (e) {
+      throw Exception('Error parseando JSON: $e\nTexto recibido: $cleanedJson');
+    }
+  }
+
+  Future<List<String>> extractIngredientsFromImage(String base64Image) async {
+    final prompt = '''
+Analiza esta imagen del interior de una nevera (o despensa) y lista todos los ingredientes y alimentos visibles.
+NO devuelvas nada más que un JSON válido. Sin markdown de bloques de código. SOLO EL TEXTO JSON.
+
+Estructura JSON requerida:
+{
+  "ingredients": ["ingrediente 1", "ingrediente 2", "ingrediente 3"]
+}
+''';
+
+    final apiKey = dotenv.env['GROQ_API_KEY'] ?? dotenv.env['GEMINI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception('API Key no encontrada.');
+    }
+
+    final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+
+    final requestBody = jsonEncode({
+      "model": "llama-3.2-11b-vision-preview",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": prompt
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/jpeg;base64,$base64Image"
+              }
+            }
+          ]
+        }
+      ],
+      "temperature": 0.2,
+      "response_format": {"type": "json_object"}
+    });
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: requestBody,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final jsonResponse = jsonDecode(response.body);
+    final responseText = jsonResponse['choices']?[0]?['message']?['content'];
+
+    if (responseText == null || responseText.isEmpty) {
+      throw Exception('Respuesta vacía de Groq: ${response.body}');
+    }
+
+    String cleanedJson = responseText.trim();
+    if (cleanedJson.startsWith('```json')) cleanedJson = cleanedJson.substring(7);
+    if (cleanedJson.startsWith('```')) cleanedJson = cleanedJson.substring(3);
+    if (cleanedJson.endsWith('```')) cleanedJson = cleanedJson.substring(0, cleanedJson.length - 3);
+
+    try {
+      final Map<String, dynamic> jsonMap = jsonDecode(cleanedJson.trim());
+      return List<String>.from(jsonMap['ingredients'] ?? []);
+    } catch (e) {
+      throw Exception('Error parseando JSON: $e\nTexto recibido: $cleanedJson');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> extractIngredientsFromText(String spokenText) async {
+    final prompt = '''
+Extrae los ingredientes mencionados en el siguiente texto y devuélvelos en una lista.
+Si el texto menciona una fecha de caducidad o similar asociada a un ingrediente, infiere la fecha correspondiente (hoy es ${DateTime.now().toIso8601String()}) y devuélvela en formato YYYY-MM-DD.
+Si no se menciona fecha, deja el valor como null.
+NO devuelvas nada más que un JSON válido. Sin markdown de bloques de código. SOLO EL TEXTO JSON.
+
+Texto: "$spokenText"
+
+Estructura JSON requerida:
+{
+  "ingredients": [
+    {
+      "name": "ingrediente 1",
+      "expirationDate": "2026-10-05"
+    },
+    {
+      "name": "ingrediente 2",
+      "expirationDate": null
+    }
+  ]
+}
+''';
+
+    final apiKey = dotenv.env['GROQ_API_KEY'] ?? dotenv.env['GEMINI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception('API Key no encontrada.');
+    }
+
+    final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+
+    final requestBody = jsonEncode({
+      "model": "qwen/qwen3.8-27b",
+      "messages": [
+        {
+          "role": "user",
+          "content": prompt
+        }
+      ],
+      "temperature": 0.2,
+      "response_format": {"type": "json_object"}
+    });
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: requestBody,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final jsonResponse = jsonDecode(response.body);
+    final responseText = jsonResponse['choices']?[0]?['message']?['content'];
+
+    if (responseText == null || responseText.isEmpty) {
+      throw Exception('Respuesta vacía de Groq: ${response.body}');
+    }
+
+    String cleanedJson = responseText.trim();
+    if (cleanedJson.startsWith('```json')) cleanedJson = cleanedJson.substring(7);
+    if (cleanedJson.startsWith('```')) cleanedJson = cleanedJson.substring(3);
+    if (cleanedJson.endsWith('```')) cleanedJson = cleanedJson.substring(0, cleanedJson.length - 3);
+
+    try {
+      final Map<String, dynamic> jsonMap = jsonDecode(cleanedJson.trim());
+      final List<dynamic> ingredientsList = jsonMap['ingredients'] ?? [];
+      return ingredientsList.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('Error parseando JSON: $e\nTexto recibido: $cleanedJson');
+    }
+  }
+
+  Future<Recipe> generateRecipeFromIngredients(List<String> ingredients) async {
+    final ingredientsList = ingredients.join(', ');
+    final prompt = '''
+Eres un chef creativo y experto en aprovechamiento alimentario (evitar el desperdicio).
+Crea una receta deliciosa y original utilizando los siguientes ingredientes que tengo en la nevera: $ingredientsList.
+Puedes asumir que el usuario tiene sal, pimienta, aceite, agua y especias básicas.
+NO devuelvas nada más que un JSON válido. Sin markdown de bloques de código. SOLO EL TEXTO JSON.
+
+Estructura JSON requerida:
+{
+  "title": "Nombre creativo de la receta",
+  "ingredients": ["ingrediente 1 con cantidades aproximadas", "ingrediente 2"],
+  "steps": ["paso 1", "paso 2 detallado"],
+  "category": "Desayuno, Almuerzo, Cena, Postre, Snack o Bebida",
+  "prepTime": "Tiempo de preparación estimado (ej. 40 minutos)",
+  "calories": "Calorías aproximadas por ración (ej. 450 kcal)"
+}
+''';
+
+    final apiKey = dotenv.env['GROQ_API_KEY'] ?? dotenv.env['GEMINI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception('API Key no encontrada en .env. Necesitas añadir GROQ_API_KEY.');
+    }
+
+    final uri = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+
+    final requestBody = jsonEncode({
+      "model": "qwen/qwen3.8-27b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant designed to output JSON."
+        },
+        {
+          "role": "user",
+          "content": prompt
+        }
+      ],
+      "temperature": 0.7,
+      "response_format": {"type": "json_object"}
+    });
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: requestBody,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Error HTTP ${response.statusCode}: ${response.body}');
+    }
+
+    final jsonResponse = jsonDecode(response.body);
+    final responseText = jsonResponse['choices']?[0]?['message']?['content'];
+
+    if (responseText == null || responseText.isEmpty) {
+      throw Exception('Respuesta vacía de Groq: ${response.body}');
+    }
+
+    String cleanedJson = responseText.trim();
+    if (cleanedJson.startsWith('```json')) cleanedJson = cleanedJson.substring(7);
+    if (cleanedJson.startsWith('```')) cleanedJson = cleanedJson.substring(3);
+    if (cleanedJson.endsWith('```')) cleanedJson = cleanedJson.substring(0, cleanedJson.length - 3);
+
+    try {
+      final Map<String, dynamic> jsonMap = jsonDecode(cleanedJson.trim());
+      return Recipe(
+        id: const Uuid().v4(),
+        title: jsonMap['title'] ?? 'Receta Generada',
+        ingredients: List<String>.from(jsonMap['ingredients'] ?? []),
+        steps: List<String>.from(jsonMap['steps'] ?? []),
+        category: jsonMap['category'] ?? 'Plato Principal',
+        prepTime: jsonMap['prepTime'],
+        calories: jsonMap['calories'],
         createdAt: DateTime.now(),
       );
     } catch (e) {

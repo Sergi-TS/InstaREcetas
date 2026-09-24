@@ -6,12 +6,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'features/recipes/presentation/pages/gallery_page.dart';
+import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Cargar variables de entorno
   await dotenv.load(fileName: ".env");
+
+  // Inicializar notificaciones
+  await NotificationService().init();
 
   // Inicializar Firebase
   await Firebase.initializeApp(
